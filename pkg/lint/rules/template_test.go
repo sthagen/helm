@@ -22,6 +22,9 @@ import (
 	"strings"
 	"testing"
 
+	"helm.sh/helm/v3/internal/test/ensure"
+	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/lint/support"
 )
 
@@ -99,5 +102,75 @@ func TestV3Fail(t *testing.T) {
 	}
 	if !strings.Contains(res[2].Err.Error(), "manifest is a crd-install hook") {
 		t.Errorf("Unexpected error: %s", res[2].Err)
+	}
+}
+
+func TestValidateMetadataName(t *testing.T) {
+	names := map[string]bool{
+		"":                          false,
+		"foo":                       true,
+		"foo.bar1234baz.seventyone": true,
+		"FOO":                       false,
+		"123baz":                    true,
+		"foo.BAR.baz":               false,
+		"one-two":                   true,
+		"-two":                      false,
+		"one_two":                   false,
+		"a..b":                      false,
+		"%^&#$%*@^*@&#^":            false,
+	}
+	for input, expectPass := range names {
+		obj := K8sYamlStruct{Metadata: k8sYamlMetadata{Name: input}}
+		if err := validateMetadataName(&obj); (err == nil) != expectPass {
+			st := "fail"
+			if expectPass {
+				st = "succeed"
+			}
+			t.Errorf("Expected %q to %s", input, st)
+			if err != nil {
+				t.Log(err)
+			}
+		}
+	}
+}
+
+func TestDeprecatedAPIFails(t *testing.T) {
+	mychart := chart.Chart{
+		Metadata: &chart.Metadata{
+			APIVersion: "v2",
+			Name:       "failapi",
+			Version:    "0.1.0",
+			Icon:       "satisfy-the-linting-gods.gif",
+		},
+		Templates: []*chart.File{
+			{
+				Name: "templates/baddeployment.yaml",
+				Data: []byte("apiVersion: apps/v1beta1\nkind: Deployment\nmetadata:\n  name: baddep"),
+			},
+			{
+				Name: "templates/goodsecret.yaml",
+				Data: []byte("apiVersion: v1\nkind: Secret\nmetadata:\n  name: goodsecret"),
+			},
+		},
+	}
+	tmpdir := ensure.TempDir(t)
+	defer os.RemoveAll(tmpdir)
+
+	if err := chartutil.SaveDir(&mychart, tmpdir); err != nil {
+		t.Fatal(err)
+	}
+
+	linter := support.Linter{ChartDir: filepath.Join(tmpdir, mychart.Name())}
+	Templates(&linter, values, namespace, strict)
+	if l := len(linter.Messages); l != 1 {
+		for i, msg := range linter.Messages {
+			t.Logf("Message %d: %s", i, msg)
+		}
+		t.Fatalf("Expected 1 lint error, got %d", l)
+	}
+
+	err := linter.Messages[0].Err.(deprecatedAPIError)
+	if err.Deprecated != "apps/v1beta1 Deployment" {
+		t.Errorf("Surprised to learn that %q is deprecated", err.Deprecated)
 	}
 }
