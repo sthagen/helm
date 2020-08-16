@@ -33,6 +33,9 @@ import (
 	"helm.sh/helm/v3/pkg/helmpath"
 )
 
+// defaultMaxHistory sets the maximum number of releases to 0: unlimited
+const defaultMaxHistory = 10
+
 // EnvSettings describes all of the environment settings.
 type EnvSettings struct {
 	namespace string
@@ -56,11 +59,14 @@ type EnvSettings struct {
 	RepositoryCache string
 	// PluginsDirectory is the path to the plugins directory.
 	PluginsDirectory string
+	// MaxHistory is the max release history maintained.
+	MaxHistory int
 }
 
 func New() *EnvSettings {
 	env := &EnvSettings{
 		namespace:        os.Getenv("HELM_NAMESPACE"),
+		MaxHistory:       envIntOr("HELM_MAX_HISTORY", defaultMaxHistory),
 		KubeContext:      os.Getenv("HELM_KUBECONTEXT"),
 		KubeToken:        os.Getenv("HELM_KUBETOKEN"),
 		KubeAPIServer:    os.Getenv("HELM_KUBEAPISERVER"),
@@ -102,15 +108,31 @@ func envOr(name, def string) string {
 	return def
 }
 
+func envIntOr(name string, def int) int {
+	if name == "" {
+		return def
+	}
+	envVal := envOr(name, strconv.Itoa(def))
+	ret, err := strconv.Atoi(envVal)
+	if err != nil {
+		return def
+	}
+	return ret
+}
+
 func (s *EnvSettings) EnvVars() map[string]string {
 	envvars := map[string]string{
 		"HELM_BIN":               os.Args[0],
+		"HELM_CACHE_HOME":        helmpath.CachePath(""),
+		"HELM_CONFIG_HOME":       helmpath.ConfigPath(""),
+		"HELM_DATA_HOME":         helmpath.DataPath(""),
 		"HELM_DEBUG":             fmt.Sprint(s.Debug),
 		"HELM_PLUGINS":           s.PluginsDirectory,
 		"HELM_REGISTRY_CONFIG":   s.RegistryConfig,
 		"HELM_REPOSITORY_CACHE":  s.RepositoryCache,
 		"HELM_REPOSITORY_CONFIG": s.RepositoryConfig,
 		"HELM_NAMESPACE":         s.Namespace(),
+		"HELM_MAX_HISTORY":       strconv.Itoa(s.MaxHistory),
 
 		// broken, these are populated from helm flags and not kubeconfig.
 		"HELM_KUBECONTEXT":   s.KubeContext,

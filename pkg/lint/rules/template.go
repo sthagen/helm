@@ -57,7 +57,7 @@ func Templates(linter *support.Linter, values map[string]interface{}, namespace 
 		return
 	}
 
-	// Load chart and parse templates, based on tiller/release_server
+	// Load chart and parse templates
 	chart, err := loader.Load(linter.ChartDir)
 
 	chartLoaded := linter.RunLinterRule(support.ErrorSev, path, err)
@@ -81,7 +81,6 @@ func Templates(linter *support.Linter, values map[string]interface{}, namespace 
 		return
 	}
 	var e engine.Engine
-	e.Strict = strict
 	e.LintMode = true
 	renderedContentMap, err := e.Render(chart, valuesToRender)
 
@@ -132,6 +131,7 @@ func Templates(linter *support.Linter, values map[string]interface{}, namespace 
 			linter.RunLinterRule(support.ErrorSev, path, validateYamlContent(err))
 			linter.RunLinterRule(support.ErrorSev, path, validateMetadataName(&yamlStruct))
 			linter.RunLinterRule(support.ErrorSev, path, validateNoDeprecations(&yamlStruct))
+			linter.RunLinterRule(support.ErrorSev, path, validateMatchSelector(&yamlStruct, renderedContent))
 		}
 	}
 }
@@ -182,6 +182,19 @@ func validateNoCRDHooks(manifest []byte) error {
 func validateNoReleaseTime(manifest []byte) error {
 	if releaseTimeSearch.Match(manifest) {
 		return errors.New(".Release.Time has been removed in v3, please replace with the `now` function in your templates")
+	}
+	return nil
+}
+
+// validateMatchSelector ensures that template specs have a selector declared.
+// See https://github.com/helm/helm/issues/1990
+func validateMatchSelector(yamlStruct *K8sYamlStruct, manifest string) error {
+	switch yamlStruct.Kind {
+	case "Deployment", "ReplicaSet", "DaemonSet", "StatefulSet":
+		// verify that matchLabels or matchExpressions is present
+		if !(strings.Contains(manifest, "matchLabels") || strings.Contains(manifest, "matchExpressions")) {
+			return fmt.Errorf("a %s must contain matchLabels or matchExpressions, and %q does not", yamlStruct.Kind, yamlStruct.Metadata.Name)
+		}
 	}
 	return nil
 }
