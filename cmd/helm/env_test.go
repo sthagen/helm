@@ -18,30 +18,18 @@ package main
 
 import (
 	"testing"
-
-	"helm.sh/helm/v3/pkg/release"
 )
 
-func TestGetHooks(t *testing.T) {
+func TestEnv(t *testing.T) {
 	tests := []cmdTestCase{{
-		name:   "get hooks with release",
-		cmd:    "get hooks aeneas",
-		golden: "output/get-hooks.txt",
-		rels:   []*release.Release{release.Mock(&release.MockReleaseOptions{Name: "aeneas"})},
-	}, {
-		name:      "get hooks without args",
-		cmd:       "get hooks",
-		golden:    "output/get-hooks-no-args.txt",
-		wantError: true,
+		name:   "completion for env",
+		cmd:    "__complete env ''",
+		golden: "output/env-comp.txt",
 	}}
 	runTestCmd(t, tests)
 }
 
-func TestGetHooksRevisionCompletion(t *testing.T) {
-	revisionFlagCompletionTest(t, "get hooks")
-}
-
-func TestGetHooksFileCompletion(t *testing.T) {
-	checkFileCompletion(t, "get hooks", false)
-	checkFileCompletion(t, "get hooks myrelease", false)
+func TestEnvFileCompletion(t *testing.T) {
+	checkFileCompletion(t, "env", false)
+	checkFileCompletion(t, "env HELM_BIN", false)
 }
