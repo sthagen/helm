@@ -19,7 +19,7 @@ require (
 	github.com/docker/go-units v0.4.0
 	github.com/evanphx/json-patch v0.0.0-20200808040245-162e5629780b
 	github.com/gobwas/glob v0.2.3
-	github.com/gofrs/flock v0.7.1
+	github.com/gofrs/flock v0.8.0
 	github.com/gosuri/uitable v0.0.4
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/lib/pq v1.7.0
