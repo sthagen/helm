@@ -35,9 +35,32 @@ import (
 )
 
 const (
-	testfile          = "testdata/local-index.yaml"
-	unorderedTestfile = "testdata/local-index-unordered.yaml"
-	testRepo          = "test-repo"
+	testfile            = "testdata/local-index.yaml"
+	annotationstestfile = "testdata/local-index-annotations.yaml"
+	chartmuseumtestfile = "testdata/chartmuseum-index.yaml"
+	unorderedTestfile   = "testdata/local-index-unordered.yaml"
+	testRepo            = "test-repo"
+	indexWithDuplicates = `
+apiVersion: v1
+entries:
+  nginx:
+    - urls:
+        - https://charts.helm.sh/stable/nginx-0.2.0.tgz
+      name: nginx
+      description: string
+      version: 0.2.0
+      home: https://github.com/something/else
+      digest: "sha256:1234567890abcdef"
+  nginx:
+    - urls:
+        - https://charts.helm.sh/stable/alpine-1.0.0.tgz
+        - http://storage2.googleapis.com/kubernetes-charts/alpine-1.0.0.tgz
+      name: alpine
+      description: string
+      version: 1.0.0
+      home: https://github.com/something
+      digest: "sha256:1234567890abcdef"
+`
 )
 
 func TestIndexFile(t *testing.T) {
@@ -84,15 +107,43 @@ func TestIndexFile(t *testing.T) {
 }
 
 func TestLoadIndex(t *testing.T) {
-	b, err := ioutil.ReadFile(testfile)
-	if err != nil {
-		t.Fatal(err)
+
+	tests := []struct {
+		Name     string
+		Filename string
+	}{
+		{
+			Name:     "regular index file",
+			Filename: testfile,
+		},
+		{
+			Name:     "chartmuseum index file",
+			Filename: chartmuseumtestfile,
+		},
 	}
-	i, err := loadIndex(b)
-	if err != nil {
-		t.Fatal(err)
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			b, err := ioutil.ReadFile(tc.Filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			i, err := loadIndex(b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			verifyLocalIndex(t, i)
+		})
 	}
-	verifyLocalIndex(t, i)
+}
+
+// TestLoadIndex_Duplicates is a regression to make sure that we don't non-deterministically allow duplicate packages.
+func TestLoadIndex_Duplicates(t *testing.T) {
+	if _, err := loadIndex([]byte(indexWithDuplicates)); err == nil {
+		t.Errorf("Expected an error when duplicate entries are present")
+	}
 }
 
 func TestLoadIndexFile(t *testing.T) {
@@ -101,6 +152,21 @@ func TestLoadIndexFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyLocalIndex(t, i)
+}
+
+func TestLoadIndexFileAnnotations(t *testing.T) {
+	i, err := LoadIndexFile(annotationstestfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyLocalIndex(t, i)
+
+	if len(i.Annotations) != 1 {
+		t.Fatalf("Expected 1 annotation but got %d", len(i.Annotations))
+	}
+	if i.Annotations["helm.sh/test"] != "foo bar" {
+		t.Error("Did not get expected value for helm.sh/test annotation")
+	}
 }
 
 func TestLoadUnorderedIndex(t *testing.T) {
@@ -286,7 +352,7 @@ func verifyLocalIndex(t *testing.T, i *IndexFile) {
 				Home:        "https://github.com/something",
 			},
 			URLs: []string{
-				"https://kubernetes-charts.storage.googleapis.com/alpine-1.0.0.tgz",
+				"https://charts.helm.sh/stable/alpine-1.0.0.tgz",
 				"http://storage2.googleapis.com/kubernetes-charts/alpine-1.0.0.tgz",
 			},
 			Digest: "sha256:1234567890abcdef",
@@ -300,7 +366,7 @@ func verifyLocalIndex(t *testing.T, i *IndexFile) {
 				Home:        "https://github.com/something/else",
 			},
 			URLs: []string{
-				"https://kubernetes-charts.storage.googleapis.com/nginx-0.2.0.tgz",
+				"https://charts.helm.sh/stable/nginx-0.2.0.tgz",
 			},
 			Digest: "sha256:1234567890abcdef",
 		},
@@ -313,7 +379,7 @@ func verifyLocalIndex(t *testing.T, i *IndexFile) {
 				Home:        "https://github.com/something",
 			},
 			URLs: []string{
-				"https://kubernetes-charts.storage.googleapis.com/nginx-0.1.0.tgz",
+				"https://charts.helm.sh/stable/nginx-0.1.0.tgz",
 			},
 			Digest: "sha256:1234567890abcdef",
 		},

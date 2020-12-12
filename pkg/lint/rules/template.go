@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -27,7 +28,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"sigs.k8s.io/yaml"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -39,14 +40,6 @@ var (
 	crdHookSearch     = regexp.MustCompile(`"?helm\.sh/hook"?:\s+crd-install`)
 	releaseTimeSearch = regexp.MustCompile(`\.Release\.Time`)
 )
-
-// validName is a regular expression for names.
-//
-// This is different than action.ValidName. It conforms to the regular expression
-// `kubectl` says it uses, plus it disallows empty names.
-//
-// For details, see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-var validName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
 
 // Templates lints the templates in the Linter.
 func Templates(linter *support.Linter, values map[string]interface{}, namespace string, strict bool) {
@@ -125,17 +118,30 @@ func Templates(linter *support.Linter, values map[string]interface{}, namespace 
 		renderedContent := renderedContentMap[path.Join(chart.Name(), fileName)]
 		if strings.TrimSpace(renderedContent) != "" {
 			linter.RunLinterRule(support.WarningSev, fpath, validateTopIndentLevel(renderedContent))
-			var yamlStruct K8sYamlStruct
-			// Even though K8sYamlStruct only defines a few fields, an error in any other
-			// key will be raised as well
-			err := yaml.Unmarshal([]byte(renderedContent), &yamlStruct)
 
-			// If YAML linting fails, we sill progress. So we don't capture the returned state
-			// on this linter run.
-			linter.RunLinterRule(support.ErrorSev, fpath, validateYamlContent(err))
-			linter.RunLinterRule(support.ErrorSev, fpath, validateMetadataName(&yamlStruct))
-			linter.RunLinterRule(support.ErrorSev, fpath, validateNoDeprecations(&yamlStruct))
-			linter.RunLinterRule(support.ErrorSev, fpath, validateMatchSelector(&yamlStruct, renderedContent))
+			decoder := yaml.NewYAMLOrJSONDecoder(strings.NewReader(renderedContent), 4096)
+
+			// Lint all resources if the file contains multiple documents separated by ---
+			for {
+				// Even though K8sYamlStruct only defines a few fields, an error in any other
+				// key will be raised as well
+				var yamlStruct *K8sYamlStruct
+
+				err := decoder.Decode(&yamlStruct)
+				if err == io.EOF {
+					break
+				}
+
+				// If YAML linting fails, we sill progress. So we don't capture the returned state
+				// on this linter run.
+				linter.RunLinterRule(support.ErrorSev, fpath, validateYamlContent(err))
+
+				if yamlStruct != nil {
+					linter.RunLinterRule(support.ErrorSev, fpath, validateMetadataName(yamlStruct))
+					linter.RunLinterRule(support.ErrorSev, fpath, validateNoDeprecations(yamlStruct))
+					linter.RunLinterRule(support.ErrorSev, fpath, validateMatchSelector(yamlStruct, renderedContent))
+				}
+			}
 		}
 	}
 }
@@ -199,10 +205,10 @@ func validateMetadataName(obj *K8sYamlStruct) error {
 	}
 	// This will return an error if the characters do not abide by the standard OR if the
 	// name is left empty.
-	if validName.MatchString(obj.Metadata.Name) {
-		return nil
+	if err := chartutil.ValidateMetadataName(obj.Metadata.Name); err != nil {
+		return errors.Wrapf(err, "object name does not conform to Kubernetes naming requirements: %q", obj.Metadata.Name)
 	}
-	return fmt.Errorf("object name does not conform to Kubernetes naming requirements: %q", obj.Metadata.Name)
+	return nil
 }
 
 func validateNoCRDHooks(manifest []byte) error {

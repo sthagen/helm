@@ -67,7 +67,7 @@ func TestUpdateCustomCacheCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(cachePath, "charts-index.yaml")); err != nil {
-		t.Fatalf("error finding created index file in custom cache: %#v", err)
+		t.Fatalf("error finding created index file in custom cache: %v", err)
 	}
 }
 
@@ -75,7 +75,7 @@ func TestUpdateCharts(t *testing.T) {
 	defer resetEnv()()
 	defer ensure.HelmHome(t)()
 
-	ts, err := repotest.NewTempServer("testdata/testserver/*.*")
+	ts, err := repotest.NewTempServerWithCleanup(t, "testdata/testserver/*.*")
 	if err != nil {
 		t.Fatal(err)
 	}

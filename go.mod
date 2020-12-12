@@ -1,10 +1,10 @@
 module helm.sh/helm/v3
 
-go 1.13
+go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/DATA-DOG/go-sqlmock v1.4.1
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Masterminds/goutils v1.1.0
 	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/Masterminds/sprig/v3 v3.1.0
@@ -17,31 +17,31 @@ require (
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v1.4.2-0.20200203170920-46ec8731fbce
 	github.com/docker/go-units v0.4.0
-	github.com/evanphx/json-patch v0.0.0-20200808040245-162e5629780b
+	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/gobwas/glob v0.2.3
-	github.com/gofrs/flock v0.7.1
+	github.com/gofrs/flock v0.8.0
 	github.com/gosuri/uitable v0.0.4
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/lib/pq v1.7.0
+	github.com/lib/pq v1.8.0
 	github.com/mattn/go-shellwords v1.0.10
 	github.com/mitchellh/copystructure v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/rubenv/sql-migrate v0.0.0-20200616145509-8d140a17f351
-	github.com/sirupsen/logrus v1.6.0
-	github.com/spf13/cobra v1.0.0
+	github.com/sirupsen/logrus v1.7.0
+	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	k8s.io/api v0.18.8
-	k8s.io/apiextensions-apiserver v0.18.8
-	k8s.io/apimachinery v0.18.8
-	k8s.io/cli-runtime v0.18.8
-	k8s.io/client-go v0.18.8
-	k8s.io/klog v1.0.0
-	k8s.io/kubectl v0.18.8
+	k8s.io/api v0.19.4
+	k8s.io/apiextensions-apiserver v0.19.4 
+	k8s.io/apimachinery v0.19.4
+	k8s.io/cli-runtime v0.19.4
+	k8s.io/client-go v0.19.4
+	k8s.io/klog/v2 v2.2.0
+	k8s.io/kubectl v0.19.4
 	sigs.k8s.io/yaml v1.2.0
 )
 

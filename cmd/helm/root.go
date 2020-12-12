@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,6 +31,7 @@ import (
 
 	"helm.sh/helm/v3/internal/experimental/registry"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/repo"
 )
 
 var globalUsage = `The Kubernetes package manager
@@ -48,11 +50,23 @@ Environment variables:
 | $HELM_CACHE_HOME                   | set an alternative location for storing cached files.                             |
 | $HELM_CONFIG_HOME                  | set an alternative location for storing Helm configuration.                       |
 | $HELM_DATA_HOME                    | set an alternative location for storing Helm data.                                |
+| $HELM_DEBUG                        | indicate whether or not Helm is running in Debug mode                             |
 | $HELM_DRIVER                       | set the backend storage driver. Values are: configmap, secret, memory, postgres   |
 | $HELM_DRIVER_SQL_CONNECTION_STRING | set the connection string the SQL storage driver should use.                      |
 | $HELM_MAX_HISTORY                  | set the maximum number of helm release history.                                   |
+| $HELM_NAMESPACE                    | set the namespace used for the helm operations.                                   |
 | $HELM_NO_PLUGINS                   | disable plugins. Set HELM_NO_PLUGINS=1 to disable plugins.                        |
+| $HELM_PLUGINS                      | set the path to the plugins directory                                             |
+| $HELM_REGISTRY_CONFIG              | set the path to the registry config file.                                         |
+| $HELM_REPOSITORY_CACHE             | set the path to the repository cache directory                                    |
+| $HELM_REPOSITORY_CONFIG            | set the path to the repositories file.                                            |
 | $KUBECONFIG                        | set an alternative Kubernetes configuration file (default "~/.kube/config")       |
+| $HELM_KUBEAPISERVER                | set the Kubernetes API Server Endpoint for authentication                         |
+| $HELM_KUBECAFILE                   | set the Kubernetes certificate authority file.                                    |
+| $HELM_KUBEASGROUPS                 | set the Groups to use for impersonation using a comma-separated list.             |
+| $HELM_KUBEASUSER                   | set the Username to impersonate for the operation.                                |
+| $HELM_KUBECONTEXT                  | set the name of the kubeconfig context.                                           |
+| $HELM_KUBETOKEN                    | set the Bearer KubeToken used for authentication.                                 |
 
 Helm stores cache, configuration, and data based on the following configuration order:
 
@@ -75,13 +89,11 @@ func newRootCmd(actionConfig *action.Configuration, out io.Writer, args []string
 		Short:        "The Helm package manager for Kubernetes.",
 		Long:         globalUsage,
 		SilenceUsage: true,
-		// This breaks completion for 'helm help <TAB>'
-		// The Cobra release following 1.0 will fix this
-		//ValidArgsFunction: noCompletions, // Disable file completion
 	}
 	flags := cmd.PersistentFlags()
 
 	settings.AddFlags(flags)
+	addKlogFlags(flags)
 
 	// Setup shell completion for the namespace flag
 	err := cmd.RegisterFlagCompletionFunc("namespace", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -193,5 +205,59 @@ func newRootCmd(actionConfig *action.Configuration, out io.Writer, args []string
 	// Find and add plugins
 	loadPlugins(cmd, out)
 
+	// Check permissions on critical files
+	checkPerms()
+
+	// Check for expired repositories
+	checkForExpiredRepos(settings.RepositoryConfig)
+
 	return cmd, nil
+}
+
+func checkForExpiredRepos(repofile string) {
+
+	expiredRepos := []struct {
+		name string
+		old  string
+		new  string
+	}{
+		{
+			name: "stable",
+			old:  "kubernetes-charts.storage.googleapis.com",
+			new:  "https://charts.helm.sh/stable",
+		},
+		{
+			name: "incubator",
+			old:  "kubernetes-charts-incubator.storage.googleapis.com",
+			new:  "https://charts.helm.sh/incubator",
+		},
+	}
+
+	// parse repo file.
+	// Ignore the error because it is okay for a repo file to be unparseable at this
+	// stage. Later checks will trap the error and respond accordingly.
+	repoFile, err := repo.LoadFile(repofile)
+	if err != nil {
+		return
+	}
+
+	for _, exp := range expiredRepos {
+		r := repoFile.Get(exp.name)
+		if r == nil {
+			return
+		}
+
+		if url := r.URL; strings.Contains(url, exp.old) {
+			fmt.Fprintf(
+				os.Stderr,
+				"WARNING: %q is deprecated for %q and will be deleted Nov. 13, 2020.\nWARNING: You should switch to %q via:\nWARNING: helm repo add %q %q --force-update\n",
+				exp.old,
+				exp.name,
+				exp.new,
+				exp.name,
+				exp.new,
+			)
+		}
+	}
+
 }

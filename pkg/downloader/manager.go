@@ -453,6 +453,12 @@ func (m *Manager) ensureMissingRepos(repoNames map[string]string, deps []*chart.
 
 	for _, dd := range deps {
 
+		// If the chart is in the local charts directory no repository needs
+		// to be specified.
+		if dd.Repository == "" {
+			continue
+		}
+
 		// When the repoName for a dependency is known we can skip ensuring
 		if _, ok := repoNames[dd.Name]; ok {
 			continue
@@ -667,7 +673,7 @@ func (m *Manager) findChartURL(name, version, repoURL string, repos map[string]*
 	if err == nil {
 		return
 	}
-	err = errors.Errorf("chart %s not found in %s", name, repoURL)
+	err = errors.Errorf("chart %s not found in %s: %s", name, repoURL, err)
 	return
 }
 
