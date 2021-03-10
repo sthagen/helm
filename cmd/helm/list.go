@@ -114,7 +114,7 @@ func newListCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
 
 	f := cmd.Flags()
 	f.BoolVarP(&client.Short, "short", "q", false, "output short (quiet) listing format")
-	f.StringVar(&client.TimeFormat, "time-format", "", "format time. Example: --time-format 2009-11-17 20:34:10 +0000 UTC")
+	f.StringVar(&client.TimeFormat, "time-format", "", `format time using golang time formatter. Example: --time-format "2006-01-02 15:04:05Z0700"`)
 	f.BoolVarP(&client.ByDate, "date", "d", false, "sort by release date")
 	f.BoolVarP(&client.SortReverse, "reverse", "r", false, "reverse the sort order")
 	f.BoolVarP(&client.All, "all", "a", false, "show all releases without any filter applied")
@@ -203,14 +203,15 @@ func compListReleases(toComplete string, cfg *action.Configuration) ([]string, c
 	client.Filter = fmt.Sprintf("^%s", toComplete)
 
 	client.SetStateMask()
-	results, err := client.Run()
+	releases, err := client.Run()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
 	var choices []string
-	for _, res := range results {
-		choices = append(choices, res.Name)
+	for _, rel := range releases {
+		choices = append(choices,
+			fmt.Sprintf("%s\t%s-%s -> %s", rel.Name, rel.Chart.Metadata.Name, rel.Chart.Metadata.Version, rel.Info.Status.String()))
 	}
 
 	return choices, cobra.ShellCompDirectiveNoFileComp
